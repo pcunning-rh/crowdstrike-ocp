@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: falcon-sensor-config
+  namespace: falcon-sensor
+data:
+  FALCONCTL_OPT_CID: <<>>
+  FALCONCTL_OPT_TAGS: <<ENV>>
+  FALCONCTL_OPT_PROVISIONING_TOKEN: <<>>

@@ -1,0 +1,104 @@
+# Source: falcon-sensor/templates/daemonset.yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: falcon-sensor
+  labels:
+    name: falcon-sensor
+    app: falcon-sensor
+  namespace: falcon-sensor
+spec:
+  selector:
+    matchLabels:
+      name: falcon-sensor
+      app: falcon-sensor
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      annotations:
+        sensor.falcon-system.crowdstrike.com/injection: disabled
+      labels:
+        name: falcon-sensor
+        app: falcon-sensor
+    spec:
+      tolerations:
+      # this toleration is to have the daemonset runnable on master nodes
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
+      serviceAccountName: falcon-sensor-sa
+      nodeSelector:
+        beta.kubernetes.io/os: linux
+      initContainers:
+      # This init container creates empty falconstore file so that when
+      # it's mounted into the sensor-node-container, k8s would just use it
+      # rather than creating a directory.  Mounting falconstore file as
+      # a file volume ensures that AID is preserved across container
+      # restarts.
+      - name: init-falconstore
+        image: {{ REGISTRY }}/ubi8/ubi:8.3
+        args: [/bin/sh, -c, 'touch /var/lib/crowdstrike/falconstore']
+        volumeMounts:
+          - name: falconstore-dir
+            mountPath: /var/lib/crowdstrike
+      containers:
+      - name: falcon-node-sensor
+        image: "{{ REGISTRY }}/crowdstrike-ocp/falcon-sensor:latest"
+        imagePullPolicy: "Always"
+        volumeMounts:
+        - name: dev
+          mountPath: /dev
+        - name: var-run
+          mountPath: /var/run
+        - name: etc
+          mountPath: /etc
+        - name: var-log
+          mountPath: /var/log
+        - name: falconstore
+          mountPath: /opt/CrowdStrike/falconstore
+        # Various pod security context settings. Bear in mind that many of these have an impact
+        # on the Falcon Sensor working correctly.
+        #
+        # - User that the container will execute as. Typically necessary to run as root (0).
+        # - Runs the Falcon Sensor containers as privileged containers. This is required when
+        #   running the Falcon Linux Sensor on Kubernetes nodes to properly run in the node's
+        #   kernel and to actually protect the node.
+        securityContext:
+          runAsUser: 0
+          privileged: true
+          readOnlyRootFilesystem: false
+          allowPrivilegeEscalation: true
+        envFrom:
+        - configMapRef:
+            name: falcon-sensor-config
+      # This spits out logs from sensor-node-container to stdout so that they
+      # are routed through k8s log driver.
+      - name: log
+        image: {{ REGISTRY }}/ubi8/ubi:8.3
+        args: [/bin/sh, -c, 'tail -n1 -f /var/log/falcon-sensor.log']
+        volumeMounts:
+        - name: var-log
+          mountPath: /var/log
+          readOnly: True
+      volumes:
+        - name: dev
+          hostPath:
+            path: /dev
+        - name: etc
+          hostPath:
+            path: /etc
+        - name: var-run
+          hostPath:
+            path: /var/run
+        - name: var-log
+          emptyDir: {}
+        - name: falconstore
+          hostPath:
+            path: /var/lib/crowdstrike/falconstore
+        - name: falconstore-dir
+          hostPath:
+            path: /var/lib/crowdstrike
+      terminationGracePeriodSeconds: 10
+      hostNetwork: true
+      hostPID: true
+      hostIPC: true
