@@ -1,7 +1,7 @@
-kind: RoleBinding
+kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1
 metadata:
-  name: falcon-sensor-sa-rolebinding
+  name: falcon-sensor-sa-clusterrolebinding
   namespace: falcon-sensor
 subjects:
   - kind: ServiceAccount
@@ -9,5 +9,5 @@ subjects:
     namespace: falcon-sensor
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: Role
+  kind: ClusterRole
   name: falcon-sensor-scc-privileged
